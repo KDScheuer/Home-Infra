@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="BUTFacdPeatFtnp8QBfN">
-    <mxGraphModel dx="1652" dy="955" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="548" dy="317" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -39,7 +39,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="G9561TO5ae7TxkCnCpoj-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Proxmox&amp;nbsp;&lt;div&gt;(Node 1)&lt;/div&gt;" vertex="1">
+        <mxCell id="G9561TO5ae7TxkCnCpoj-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Proxmox&amp;nbsp;&lt;div&gt;(Node 2)&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="120" x="500" y="130" as="geometry" />
         </mxCell>
         <mxCell id="G9561TO5ae7TxkCnCpoj-13" edge="1" parent="1" source="G9561TO5ae7TxkCnCpoj-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;defaultLabelBackgroundColor=page;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=light-dark(#000000,#B3B3B3);endArrow=openThin;endFill=0;startArrow=openThin;startFill=0;" target="G9561TO5ae7TxkCnCpoj-6">
@@ -60,7 +60,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="G9561TO5ae7TxkCnCpoj-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Proxmox&amp;nbsp;&lt;div&gt;(Node 1)&lt;/div&gt;" vertex="1">
+        <mxCell id="G9561TO5ae7TxkCnCpoj-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Proxmox&amp;nbsp;&lt;div&gt;(Node 3)&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="120" x="500" y="210" as="geometry" />
         </mxCell>
         <mxCell id="G9561TO5ae7TxkCnCpoj-15" edge="1" parent="1" source="G9561TO5ae7TxkCnCpoj-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;defaultLabelBackgroundColor=page;exitX=0.588;exitY=0.001;exitDx=0;exitDy=0;exitPerimeter=0;strokeColor=light-dark(#000000,#B3B3B3);endArrow=openThin;endFill=0;startArrow=openThin;startFill=0;">
