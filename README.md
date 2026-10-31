@@ -1,8 +1,10 @@
 # Home Infrastructure
 
-> A high-level overview of my home infrastructure. It runs several services for the family and hosts my wife's small business (website, database and API).
+> A 3-node Proxmox HA cluster running 17 self-hosted services for my family and my wife's small business, with zero open inbound ports, 3-2-1 backups and end-to-end monitoring.
 
-![Home infrastructure](docs/img/Picture.png)
+<img src="docs/img/Picture.png" alt="Home infrastructure" width="600">
+<!-- Previous full-width version: ![Home infrastructure](docs/img/Picture.png) -->
+
 
 ## At a Glance
 
@@ -13,7 +15,9 @@
 | **[Services](#services)**             | 17 self-hosted apps (media, passwords, photos, DNS)     |
 | **[Backups](#backup--recovery)**      | 3-2-1: weekly local, monthly encrypted offsite          |
 | **[Access](#networking--access)**     | Zero open inbound ports, Cloudflare Tunnel & Tailscale  |
-| **[Alerting](#monitoring--alerting)** | Push notifications via ntfy, email via healthchecks.io  |
+| **[Alerting](#monitoring--alerting)** | Push notifications via ntfy, email via Healthchecks.io  |
+| **[Patching](#updates--patching)**    | Daily auto-updates for public services, rolling Proxmox upgrades |
+| **[Evolution](#how-it-evolved)**      | Single Docker host → k3s cluster built as IaC → Proxmox HA with LXC |
 
 ## Why I Built It
 
