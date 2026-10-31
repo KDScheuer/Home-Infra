@@ -1,4 +1,0 @@
----
-- name: Set system timezone
-  community.general.timezone:
-    name: "{{ proxmox_timezone }}"

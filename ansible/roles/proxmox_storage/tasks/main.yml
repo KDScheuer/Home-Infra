@@ -1,6 +1,0 @@
----
-- name: Include NFS package tasks
-  ansible.builtin.import_tasks: nfs_packages.yml
-
-- name: Include NFS storage configuration tasks
-  ansible.builtin.import_tasks: nfs_storages.yml

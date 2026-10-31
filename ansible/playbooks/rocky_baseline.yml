@@ -1,5 +1,0 @@
-- hosts: vms
-  become: true
-  ignore_unreachable: true
-  roles:
-    - rocky_baseline

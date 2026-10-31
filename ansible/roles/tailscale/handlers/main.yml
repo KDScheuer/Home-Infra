@@ -1,6 +1,0 @@
-# Managed by Ansible
----
-- name: restart tailscaled
-  ansible.builtin.service:
-    name: tailscaled
-    state: restarted

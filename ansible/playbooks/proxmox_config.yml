@@ -1,8 +1,0 @@
----
-- name: Configure Proxmox base on all nodes
-  hosts: proxmox
-  become: true
-  roles:
-    - proxmox_base
-    - proxmox_storage
-    - proxmox_ha

@@ -1,7 +1,0 @@
-# snmp-exporter values
-# Deploy with:
-#   helm install snmp-exporter prometheus-community/prometheus-snmp-exporter \
-#     --namespace monitoring -f snmp-values.yml
-
-serviceMonitor:
-  enabled: false  # using additionalScrapeConfigs in prometheus instead

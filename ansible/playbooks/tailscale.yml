@@ -1,8 +1,0 @@
----
-# Run rocky_baseline.yml (or site.yml) before this playbook.
-- name: Configure Tailscale subnet router
-  hosts: tailscale
-  become: true
-  ignore_unreachable: true
-  roles:
-    - tailscale

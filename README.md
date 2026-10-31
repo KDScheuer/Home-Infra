@@ -1,147 +1,159 @@
-# The Home Lab
+# Home Infrastructure
 
-### Virtualized locally hosted HA k3s cluster with NFS-backed storage
+> A high-level overview of my home infrastructure. It runs several services for the family and hosts my wife's small business (website, database and API).
 
-![k3s](https://img.shields.io/badge/k3s-v1.34-FFC61C?logo=k3s&logoColor=black)
-![Proxmox](https://img.shields.io/badge/proxmox-9.1-E57000?logo=proxmox&logoColor=white)
-![Terraform](https://img.shields.io/badge/terraform-provisioned-7B42BC?logo=terraform&logoColor=white)
-![Ansible](https://img.shields.io/badge/ansible-managed-EE0000?logo=ansible&logoColor=white)
-![Helm](https://img.shields.io/badge/helm-deployed-0F1689?logo=helm&logoColor=white)
+![Home infrastructure](docs/img/Picture.png)
 
-![Homelab Picture](docs/assets/homelab.png)
+## At a Glance
 
----
+|                                       |                                                         |
+|---------------------------------------|---------------------------------------------------------|
+| **[Compute](#compute--storage)**      | 3-node Proxmox VE cluster with HA failover              |
+| **[Storage](#compute--storage)**      | Synology NAS, 12 TB usable, NFS-backed datastores       |
+| **[Services](#services)**             | 17 self-hosted apps (media, passwords, photos, DNS)     |
+| **[Backups](#backup--recovery)**      | 3-2-1: weekly local, monthly encrypted offsite          |
+| **[Access](#networking--access)**     | Zero open inbound ports, Cloudflare Tunnel & Tailscale  |
+| **[Alerting](#monitoring--alerting)** | Push notifications via ntfy, email via healthchecks.io  |
 
-- [Infrastructure and Network](#infrastructure-and-network)
-- [Services](#services)
-- [Home Lab Provisioning](#home-lab-provisioning)
-- [Monitoring / Alerting](#monitoring--alerting)
-- [Backup Process](#backup-process)
-- [Design Decisions](#design-decisions)
-- [Network Ranges](#network-ranges)
-- [Hardware](#hardware)
+## Why I Built It
 
----
-
-## Infrastructure and Network
-3 Node Proxmox Cluster Running 3 K3s Control Nodes, 3 K3s Worker Nodes, and 1 Tailscale Rocky VM. All Storage is backed with the Synology NAS via NFS mounts. Control plane consists of MetalLB, Traefik, cert-manager, and NFS provisioner.
-
-[Hardware Specs](#hardware) | [Network Tables](#networks)
-
-![Network Diagram](docs/assets/network.png)
+- **Privacy:** block trackers and enforce DNS over TLS/HTTPS
+- **Ownership:** back up family photos, files and media on hardware I control
+- **Parental control:** choose what content my young kids can watch
+- **Predictable costs:** run my wife's business without pay-as-you-go cloud billing
 
 ---
+
+## Architecture
+![Architecture](docs/img/Infra.png)
+
+| Type    | Role         | Model                  | Notes                |
+|---------|--------------|------------------------|----------------------|
+| Compute | Proxmox Node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
+| Compute | Proxmox Node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
+| Compute | Proxmox Node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
+| Storage | NAS          | Synology DS418         | 4x 4TB, RAID 5       |
+| Network | Switch       | Netgear GS308          | 8-port unmanaged     |
+| Network | Router       | eero Pro 7             | ISP provided         |
+
+## Compute & Storage
+
+Services run as LXC containers on a 3-node Proxmox cluster. Their disks live on a shared NFS datastore, so Proxmox HA can restart them on another node if one fails. Sidecar services run as separate Docker containers inside the same LXC as the service they support.
+
+The NAS is split into purpose-specific shares. Services with large media libraries use dedicated mounts, which keeps guest backups small and lets that data follow its own backup schedule ([Backup & Recovery](#backup--recovery)).
+
+![Storage](docs/img/Storage.png)
+
+**Known gaps**
+
+| Gap                           | Impact                                  | Plan                                                          |
+|-------------------------------|-----------------------------------------|---------------------------------------------------------------|
+| No UPS                        | A power blip takes everything down hard | UPS with graceful shutdown                                    |
+| NAS is a single storage point | NAS failure stops all HA guests         | Accepted risk; RAID 5 covers one disk, backups cover the rest |
+
+## Networking & Access
+
+Internal DNS resolves `*.kscheuer.com` to a reverse proxy, which terminates TLS and forwards traffic to the LXC containers. Most services are only reachable from the LAN or over Tailscale. The only public services are my wife's website and API, plus ntfy so alerts reach my phone off the LAN. These go through Cloudflare Tunnel straight to their LXC, bypassing internal DNS and the reverse proxy, with TLS terminated at Cloudflare's edge.
+
+![Access](docs/img/Access.png)
+
+**Known gaps**
+
+| Gap                            | Impact                                         | Plan                              |
+|--------------------------------|------------------------------------------------|-----------------------------------|
+| Flat network, no VLANs         | No isolation between services and home devices | VLANs when the switch is replaced |
+| Unmanaged switch, single links | The switch is a single point of failure        | Managed switch with LACP          |
+
+## Monitoring & Alerting
+
+- **Hosts and NAS:** Proxmox and Synology send all notifications to ntfy, which pushes them to my phone.
+- **Services:** Uptime Kuma checks each service's HTTP status code and response content, and pushes an alert to my phone when one fails. Public services are checked by their public hostnames, so each check runs end to end through external DNS, Cloudflare and the tunnel.
+- **Dead man's switch:** a cron job on the ntfy LXC runs every minute. It checks that ntfy accepts a post to a dummy `/hc-check` topic and that Uptime Kuma responds, then pings Healthchecks.io. A failed check sends a failure ping, and if pings stop for longer than the 3-minute grace period, Healthchecks.io emails me. Email keeps this path independent of anything in the lab, so I still hear about it if ntfy, Uptime Kuma or the whole lab goes down.
+
+![Notify](docs/img/Notify.png)
+
+**Known gaps**
+
+| Gap                                     | Impact                                     | Plan                                             |
+|-----------------------------------------|--------------------------------------------|--------------------------------------------------|
+| Monitoring runs on the same NFS storage | A NAS outage takes ntfy and Uptime Kuma down | Accepted risk; Healthchecks.io still emails me |
+
+## Backup & Recovery
+
+**Strategy:** 3-2-1, with production data, a local backup on the NAS, and an encrypted offsite copy in Wasabi.
+
+**Break-glass:** a printed page kept offline holds everything needed to rebuild if Vaultwarden is lost, including rclone passwords and salts, SSH keys, IPs and admin credentials.
+
+- **Local:** Proxmox backs up every container weekly to the `pve-backups` share and keeps the last 4.
+- **Offsite staging:** each month, Proxmox backs up every container to the `pve-offsite` share, and an offsite LXC builds rclone archives of the Immich and Synology Drive shares alongside them.
+- **Offsite upload:** the offsite LXC then moves everything in `pve-offsite` to Wasabi. Data is encrypted by rclone before upload, locked against deletion for 90 days with object lock, and expired by a lifecycle policy after 90 days.
+
+| Data                   | Frequency | Location                    | Retention |
+|------------------------|-----------|-----------------------------|-----------|
+| Proxmox guests         | Weekly    | NAS (`pve-backups`)         | Last 4    |
+| Proxmox guests         | Monthly   | Wasabi (encrypted, locked)  | 90 days   |
+| Photos (Immich)        | Monthly   | Wasabi (encrypted, locked)  | 90 days   |
+| Files (Synology Drive) | Monthly   | Wasabi (encrypted, locked)  | 90 days   |
+
+Jellyfin media is not backed up, since it can be re-downloaded.
+
+**Why monthly offsite:** offsite is for the worst case, where the house or NAS is lost or ransomware hits. Losing up to a month of data in that case is acceptable, and it keeps offsite storage under 1 TB for cost reasons. If an upload would cross 1 TB, the job fails and notifies me instead. Archives are built on the 1st and uploaded on the 2nd, so either step can be re-run by itself.
+
+![Backup](docs/img/Backup.png)
+
+## Updates & Patching
+
+Public services update themselves daily, both OS packages and container images. An update could break something, but that's a risk I accept to keep admin overhead low, and Uptime Kuma alerts me if it happens. Everything else is updated from scripts on my workstation.
+
+| Layer                                  | Method                                                                                           | Cadence                    |
+|----------------------------------------|--------------------------------------------------------------------------------------------------|----------------------------|
+| Public services (website, API, ntfy)   | Cron runs `apt upgrade` and pulls the latest container images                                    | Daily                      |
+| Other LXCs: OS                         | Script runs `apt upgrade` on each LXC                                                            | Ad hoc                     |
+| Other LXCs: containers                 | Diun notifies me of new images; a script pulls them and restarts only containers that changed    | When Diun notifies         |
+| Proxmox hosts                          | Rolling script: one node at a time, enter maintenance mode, confirm guests migrated, `apt full-upgrade`, reboot, exit maintenance mode | Ad hoc |
+| NAS (DSM)                              | Manual, after reading the release notes                                                          | As released                |
 
 ## Services
 
-Clients are directed to MetalLB via DNS provided by the router during DHCP. MetalLB has 3 VIP's assigned, .120 for application traffic using 443 or 80, .129 for DNS traffic using 53, and 128 for jellyfin traffic on port 8096 (required as our tv does not like being reverse proxied). Traefik is in place to reverse proxy to the service IP's as well as provide TLS termination. 
+Everything is LAN or Tailscale only unless marked public.
 
-| Service        | Subdomain               | Purpose                  |
-|----------------|-------------------------|--------------------------|
-| AdGuard Home   | adguard.kds-dev.com     | DNS + ad blocking        |
-| Vaultwarden    | vaultwarden.kds-dev.com | Password manager         |
-| Jellyfin       | jellyfin.kds-dev.com    | Media server             |
-| Immich         | immich.kds-dev.com      | Photo management         |
-| Synology Drive | drive.kds-dev.com       | Family file storage      |
-| Homepage       | home.kds-dev.com        | Self-hosted dashboard    |
-| Mealie         | mealie.kds-dev.com      | Recipe and meal planning |
-
-![Services Diagram](docs/assets/services.png)
-
----
-
-## Home Lab Provisioning
-NAS is manually configured following [NAS Config](/docs/nas-setup.md)
-
-Proxmox is manually installed on each physical server and API Key generated. 
-
-Everything else is infrastructure as code and deployed via terraform, ansible, and helm.
-
----
-
-[Terraform](/terraform/)
-
-  - Deploys 3 K3s Control Plane VM's
-  - Deploys 3 K3s Worker VM's
-  - Deploys 1 Tailscale VM
----
-
-[Ansible](/ansible/)
-
-  - Finishes Proxmox Configurations *(VM HA Rules, Storage, SSH Key Auth, etc.)*
-  - Baseline Rocky Config *(Time, Hostname, Disabled Password Auth, SSH Key Auth, etc.)*
-  - Creates & Configures K3s Cluster *(Creates Kube VIP, Firewall Rules, etcd, etc.)*
-  - Configures Tailscale VM *(Install required packages, etc)*
----
-
-[Helm](/helm/)
-  - Deploys Infrastructure services MetalLB, Traefik, NFS Provisioner, Cert Manager
-  - Issues TLS Certificate
-  - Deploys Applications onto K3s Cluster
+| Category   | Service      | Purpose                                | Exposure            |
+|------------|--------------|----------------------------------------|---------------------|
+| Business   | moonlightweb | My wife's business website             | Public (Cloudflare) |
+| Business   | moonlightapi | My wife's business backend: external API, internal API and database. The APIs listen on separate ports | External API only (Cloudflare) |
+| Family     | Immich       | Photo and video backup                 | LAN / Tailscale     |
+| Family     | Jellyfin     | Media streaming                        | LAN / Tailscale     |
+| Family     | Mealie       | Recipes and meal planning              | LAN / Tailscale     |
+| Media      | Tdarr        | Media transcoding                      | LAN / Tailscale     |
+| Media      | qBittorrent  | Downloads                              | LAN / Tailscale     |
+| Network    | AdGuard Home | Internal DNS and ad/tracker blocking. Enforce DNS over TLS/HTTPS | LAN / Tailscale     |
+| Network    | Traefik      | Reverse proxy and TLS termination      | LAN / Tailscale     |
+| Network    | cloudflared  | Cloudflare Tunnel endpoint             | Outbound only       |
+| Network    | Tailscale    | Remote access to the LAN               | Tailnet             |
+| Security   | Vaultwarden  | Password manager                       | LAN / Tailscale     |
+| Operations | Uptime Kuma  | Service monitoring                     | LAN / Tailscale     |
+| Operations | ntfy         | Push notifications                     | Public (Cloudflare) |
+| Operations | Diun         | Container image update notifications   | LAN / Tailscale     |
+| Operations | Homepage     | Dashboard for all services             | LAN / Tailscale     |
+| Operations | offsites     | Builds and uploads offsite backups     | LAN / Tailscale     |
 
 ---
 
-## Monitoring / Alerting
-> Grafana/Prometheus stack deployment in progress 
+## How It Evolved
 
----
+| Version | Design                                                                                     | Why it changed                                      |
+|---------|--------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| v1      | Single Rocky Linux host, Docker Compose, Caddy                                              | No redundancy                                       |
+| v2      | k3s on Proxmox (3 control-plane, 3 worker VMs), built with Ansible, Terraform, Helm, MetalLB | More upkeep and resources than the services needed |
+| v3      | Proxmox HA with LXC containers on NFS shared storage                                       | Current design                                      |
 
-## Backup Process
-Backups are designed to be as simple as possible and are conducted according to the table below. 
+- **v1** was my first home lab. Once I was hooked, I started building v2.
+- **v2** was fully infrastructure as code, but it was overkill. I didn't need multiple replicas of any service or that level of HA, and it cost more admin time and server resources than it was worth.
+- **v3** runs services in LXC containers with their disks on NFS, so Proxmox HA can restart them on another node and CRS can rebalance load across nodes. A failover means under a minute of downtime for the affected service. That's a trade I'm happy to make for how much easier it is to maintain, troubleshoot and back up.
 
-More information regarding backups [Backup Strategy](/backups/ReadMe.md) 
+**What I learned:** match the complexity to the actual requirements, not to what's possible.
 
-| Backup      | Type     | Frequency                 | Retention         | Notes                                                   |
-|-------------|----------|---------------------------|-------------------|---------------------------------------------------------|
-| Application | On-Site  | Thursday (1–5am)          | 35 Days           | Service scaled to 0 for atomic operations               |
-| Application | Off-Site | 1st Saturday of Month     | 180 Days          | Latest on-site backup copied to AWS S3 Glacier          |
-| Application | Offline  | Quarterly                 | 2 Recovery Points | Copied to external SSD                                  |
-| Secrets     | On-Site  | Hourly (change-triggered) | 5 Recovery Points | Only copies if hash of .env has changed                 |
-| Secrets     | Off-Site | Sunday (1am)              | 5 AWS Versions    | Only copies if hash of .env has changed                 |
-| Secrets     | Offline  | Quarterly                 | 5 Recovery Points | Copied to external SSD                                  |
-| SSH Keys    | On-Site  | Manual                    | 2 Recovery Points | Copied to NAS manually                                  |
-| SSH Keys    | Off-Site | Manual                    | 2 Recovery Points | Stored in AWS Secrets Manager                           |
-| SSH Keys    | Offline  | Quarterly                 | 2 Recovery Points | Copied to external SSD                                  |
+## Roadmap
 
----
-
-## Design Decisions
-
-| Choice                   | Reason                                                                                                                                             |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| Dedicated Tailscale VM   | Allows for DR Access, Maintains HA via Proxmox, and is persistent to stay in Tailscale's free tier                                                 |
-| K3s via Proxmox          | Allows for snapshots, easy provisioning / reprovisioning, allows for 3 control plane and 3 worker VM's                                             |
-| Flat Networking          | A single /24 is in use due to my home router not supporting VLAN's for true separation of concerns                                                 |
-| K3s Networking Isolated  | These networks do not need to be exposed as access is managed via VXLAN and iptables maintained by kube-proxy and funneled through MetalLB         |
-| All Secrets in .env      | This was done for ease of backup, restore, and getting up and running. This is an anti-practice but this is a home-lab so I have accepted the risk |
-| Single Points of Failure | The NAS, Switch, Router, Modem, and Power are all single points of failure. This is an acceptable risk due to practical and budgetary limitations. |
-
----
-
-## Network Ranges
-
-| Range              | Role                                                                                      |
-|--------------------|-------------------------------------------------------------------------------------------|
-| 10.42.0.0/16       | Flannel VXLAN *(Pod Networking)*                                                          |
-| 10.43.0.0/16       | Kube-Proxy IP Tables *(Service Networking)*                                               |
-| 192.168.0.1        | Default gateway                                                                           |
-| 192.168.0.2–.99    | DHCP clients                                                                              |
-| 192.168.0.100–.109 | Physical nodes (.101, .102, .103)                                                         |
-| 192.168.0.110–.119 | Control plane VMs (.110 VIP, .111–.113 VMs)                                               |
-| 192.168.0.120–.129 | MetalLB pool (.120 Traefik, .121–.123 worker VMs, .128 Jellyfin direct, .129 AdGuard DNS) |
-| 192.168.0.130–.139 | Infrastructure VMs (.131 ts1 — Tailscale subnet router)                                   |
-| 192.168.0.200–.209 | Storage (.201 Synology NAS)                                                               |
-
----
-
-## Hardware
-
-| Type    | Role     | Model                  | Notes                |
-|---------|----------|------------------------|----------------------|
-| Compute | k3s node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
-| Compute | k3s node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
-| Compute | k3s node | ThinkCentre M710q Tiny | Intel i5 / 16GB DDR4 |
-| Storage | NAS      | Synology DS418         | 4x 4TB, RAID 5       |
-| Network | Switch   | Netgear GS308          | 8-port unmanaged     |
-| Network | Router   | EERO Pro 7             | ISP Provided         |
-| Network | Modem    | --                     | ISP Provided         |
+- [ ] UPS with graceful shutdown
+- [ ] Managed switch and VLAN segmentation

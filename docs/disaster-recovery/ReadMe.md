@@ -1,1 +1,0 @@
-TODO Split out DR info from helm readmes from migrations, cleanup helm readmes to just have deployment steps and all dr steps go into app specific docs here
