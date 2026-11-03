@@ -107,15 +107,15 @@ Jellyfin media is not backed up, since it can be re-downloaded.
 
 ## Updates & Patching
 
-Public services update themselves daily, both OS packages and container images. An update could break something, but that's a risk I accept to keep admin overhead low, and Uptime Kuma alerts me if it happens. Everything else is updated from scripts on my workstation.
+Public services update themselves daily, both OS packages and container images. An update could break something, but that's a risk I accept to keep admin overhead low, and Uptime Kuma alerts me if it happens. At least once a week, I patch every LXC (public services included) and the Proxmox hosts from my admin workstation using three Python scripts. Each script has a live terminal UI, and a single `.env` file configures all three. They reach nodes by IP and LXCs through `pct exec`, so they keep working while DNS or the reverse proxy restarts, and those containers are updated last. → [Update scripts README](update-scripts/README.md)
 
-| Layer                                  | Method                                                                                           | Cadence                    |
-|----------------------------------------|--------------------------------------------------------------------------------------------------|----------------------------|
-| Public services (website, API, ntfy)   | Cron runs `apt upgrade` and pulls the latest container images                                    | Daily                      |
-| Other LXCs: OS                         | Script runs `apt upgrade` on each LXC                                                            | Ad hoc                     |
-| Other LXCs: containers                 | Diun notifies me of new images; a script pulls them and restarts only containers that changed    | When Diun notifies         |
-| Proxmox hosts                          | Rolling script: one node at a time, enter maintenance mode, confirm guests migrated, `apt full-upgrade`, reboot, exit maintenance mode | Ad hoc |
-| NAS (DSM)                              | Manual, after reading the release notes                                                          | As released                |
+| Layer                                | Method                                                                                                                                                               | Cadence            |
+|--------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------|
+| Public services (website, API, ntfy) | Cron runs `apt upgrade` and pulls the latest container images                                                                                                        | Daily              |
+| LXC OS packages                      | `lxc-os-updater.py` upgrades every running LXC in parallel. It reboots only when asked and needed, one at a time, and waits for Docker containers to come back up      | Weekly             |
+| Docker images                        | Diun notifies me; `lxc-docker-image-updater.py` pulls new images, recreates only the Compose projects whose image changed, and confirms they're healthy               | Weekly, or sooner when Diun notifies |
+| Proxmox hosts                        | `pve-rolling-updater.py` checks quorum and HA first, then goes one node at a time: maintenance mode, migrate guests off, `dist-upgrade`, reboot only if needed, bring it back. Stops on the first failure | Weekly             |
+| NAS (DSM)                            | Manual, after reading the release notes                                                                                                                              | As released        |
 
 ## Services
 
